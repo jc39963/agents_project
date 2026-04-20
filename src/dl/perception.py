@@ -1,1 +1,0 @@
-# use Yolo or something to find clothing in frame
