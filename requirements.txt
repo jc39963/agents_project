@@ -1,0 +1,3 @@
+colorharmonies
+webcolors
+cv2
