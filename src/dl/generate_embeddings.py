@@ -13,6 +13,7 @@ from transformers import CLIPProcessor, CLIPModel
 import torch
 from data.database import get_db
 import zipfile
+from matching import encode_images, encode_texts
 
 # Load the model and processor directly from Hugging Face
 model_name = "patrickjohncyh/fashion-clip"
@@ -34,31 +35,6 @@ def read_images(zip_path):
                 all_images.append(image)
   return all_images
 
-# Helper function to mimic FashionCLIP's behavior
-def encode_images(images):
-    # images should be a list of PIL images or numpy arrays
-    inputs = processor(images=images, return_tensors="pt", padding=True)
-    with torch.no_grad():
-        outputs = model.get_image_features(**inputs)
-        if hasattr(outputs, 'pooler_output'):
-            image_features = outputs.pooler_output
-        elif isinstance(outputs, (list, tuple)):
-            image_features = outputs[0]
-        else:
-            image_features = outputs
-    return image_features / image_features.norm(p=2, dim=-1, keepdim=True) # Normalize
-
-def encode_texts(texts):
-    inputs = processor(text=texts, return_tensors="pt", padding=True)
-    with torch.no_grad():
-        outputs = model.get_text_features(**inputs)
-        if hasattr(outputs, 'pooler_output'):
-            text_features = outputs.pooler_output
-        elif isinstance(outputs, (list, tuple)):
-            text_features = outputs[0]
-        else:
-            text_features = outputs
-    return text_features / text_features.norm(p=2, dim=-1, keepdim=True) # Normalize
 
 def ingest_to_pinecone(embeddings):
         # Process in batches
@@ -72,7 +48,7 @@ def ingest_to_pinecone(embeddings):
         index.upsert(vectors_to_upsert)
 
         print(
-            f"✅ Upserted batch {i // BATCH_SIZE + 1} ({len(vectors_to_upsert)} products)"
+            f"Upserted batch {i // BATCH_SIZE + 1} ({len(vectors_to_upsert)} products)"
         )
 
     print("🎉 All embeddings ingested into Pinecone successfully.")
