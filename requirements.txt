@@ -1,3 +1,6 @@
+colorharmonies
+webcolors
+cv2
 ultralytics
 numpy
 matplotlib

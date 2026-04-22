@@ -1,2 +1,4 @@
 /data
 .env
+agent_output.txt
+**/__pycache__
