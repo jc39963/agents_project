@@ -1,3 +1,17 @@
 colorharmonies
 webcolors
 cv2
+ultralytics
+numpy
+matplotlib
+pandas
+torch
+transformers
+pillow
+sentence_transformers
+pinecone-client
+pinecone
+dotenv
+faiss
+fashion-clip
+streamlit
