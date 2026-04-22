@@ -255,20 +255,3 @@ Your response MUST be a JSON object with the following structure:
         return None
 
 
-if __name__ == "__main__":
-    # Example Usage Flow
-    original_image = "data/images/captured.jpg"
-
-    # For testing, you would normally run the baseline first to get its IDs, like this:
-    print("Getting baseline recommendations...")
-    baseline_data = llm_agent_with_function_calling(original_image)
-    baseline_recs = baseline_data.get("find_recs", {}).get("recommendations", [])
-    print(f"Baseline Recommendations: {baseline_recs}")
-
-    if baseline_recs:
-        evaluate_robustness(original_image, baseline_recs)
-        evaluate_aesthetic(original_image, baseline_recs)
-    else:
-        print(
-            "No baseline recommendations found to compare against. Did the agent hit an error?"
-        )
