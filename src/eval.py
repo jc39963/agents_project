@@ -5,21 +5,25 @@ import time
 import base64
 import pandas as pd
 import openai
-from non_dl.agent import llm_agent_with_function_calling
+from src.non_dl.agent import llm_agent_with_function_calling
+from src.dl.agent import Agent
+
+# from non_dl.agent import llm_agent_with_function_calling
 from dotenv import load_dotenv
 
 # eval tab should show latency (returned by original agent call), 2 overlaps (w/ images), and aesthetic eval
 
+
 def calculate_overlap(original_list: list[str], new_list: list[str]) -> float:
     if not original_list:
         return 0.0
-    
+
     set_orig = set(original_list)
     set_new = set(new_list)
-    
+
     # How many items from new list are present in original one
     overlap_count = len(set_orig.intersection(set_new))
-    
+
     # Calculate percentage overlap based on the size of original list
     overlap_percentage = (overlap_count / len(set_orig)) * 100
     return overlap_percentage
@@ -30,7 +34,10 @@ def encode_image(image_path: str) -> str:
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
-def evaluate_robustness(image_path: str, original_item_ids: list[str]):
+
+def evaluate_robustness(
+    image_path: str, original_item_ids: list[str], agent_type: str = "non-dl"
+):
     """Tests agent robustness by blurring and darkening the image, then calculating result overlap."""
     img = cv2.imread(image_path)
     if img is None:
@@ -41,21 +48,49 @@ def evaluate_robustness(image_path: str, original_item_ids: list[str]):
     base_dir = os.path.dirname(image_path)
     base_name = os.path.basename(image_path)
     name, ext = os.path.splitext(base_name)
-    
+
     blurred_path = os.path.join(base_dir, f"{name}_blurred{ext}")
     dark_path = os.path.join(base_dir, f"{name}_dark{ext}")
 
     # Apply a strong Gaussian blur
     blurred_img = cv2.GaussianBlur(img, (25, 25), 0)
     cv2.imwrite(blurred_path, blurred_img)
-    
+
     # Wait to avoid rate limits
     time.sleep(3)
 
-    print(f"\n[Test 1] Running agent on blurred image: {blurred_path}")
-    blurred_data = llm_agent_with_function_calling(blurred_path, goal="find items for blurred image")
-    blurred_recs = blurred_data.get("find_recs", {}).get("recommendations", [])
-    
+    print(f"\n[Test 1] Running {agent_type} agent on blurred image: {blurred_path}")
+    blurred_recs = []
+    if agent_type == "non-dl":
+        blurred_data = llm_agent_with_function_calling(
+            blurred_path, goal="find items for blurred image"
+        )
+        blurred_recs = [
+            str(r) for r in blurred_data.get("find_recs", {}).get("recommendations", [])
+        ]
+    elif agent_type == "dl":
+        dl_agent = Agent(log_to_ui=False)
+        blurred_b64 = encode_image(blurred_path)
+        for _ in dl_agent.chat(blurred_b64, blurred_path):
+            pass
+        for log in reversed(dl_agent.current_run_logs):
+            if log["action"] == "find_similar_items":
+                res = log["result"]
+                if isinstance(res, str):
+                    try:
+                        res = json.loads(res)
+                    except:
+                        pass
+                if isinstance(res, str):
+                    try:
+                        res = json.loads(res)
+                    except:
+                        pass
+                if isinstance(res, dict):
+                    matches = res.get("matches", [])
+                    blurred_recs = [str(m.get("id")) for m in matches[:4]]
+                    break
+
     blur_overlap = calculate_overlap(original_item_ids, blurred_recs)
     print(f"Blur Test Recommendations: {blurred_recs}")
     print(f"Blur Test Overlap: {blur_overlap:.2f}%")
@@ -67,20 +102,46 @@ def evaluate_robustness(image_path: str, original_item_ids: list[str]):
     # Wait to avoid rate limits
     time.sleep(3)
 
-    print(f"\n[Test 2] Running agent on darkened image: {dark_path}")
-    dark_data = llm_agent_with_function_calling(dark_path, goal="find items for dark image")
-    dark_recs = dark_data.get("find_recs", {}).get("recommendations", [])
-    
+    print(f"\n[Test 2] Running {agent_type} agent on darkened image: {dark_path}")
+    dark_recs = []
+    if agent_type == "non-dl":
+        dark_data = llm_agent_with_function_calling(
+            dark_path, goal="find items for dark image"
+        )
+        dark_recs = [
+            str(r) for r in dark_data.get("find_recs", {}).get("recommendations", [])
+        ]
+    elif agent_type == "dl":
+        dl_agent = Agent(log_to_ui=False)
+        dark_b64 = encode_image(dark_path)
+        for _ in dl_agent.chat(dark_b64, dark_path):
+            pass
+        for log in reversed(dl_agent.current_run_logs):
+            if log["action"] == "find_similar_items":
+                res = log["result"]
+                if isinstance(res, str):
+                    try:
+                        res = json.loads(res)
+                    except:
+                        pass
+                if isinstance(res, str):
+                    try:
+                        res = json.loads(res)
+                    except:
+                        pass
+                if isinstance(res, dict):
+                    matches = res.get("matches", [])
+                    dark_recs = [str(m.get("id")) for m in matches[:4]]
+                    break
+
     dark_overlap = calculate_overlap(original_item_ids, dark_recs)
     print(f"Dark Test Recommendations: {dark_recs}")
     print(f"Dark Test Overlap: {dark_overlap:.2f}%")
 
-    return {
-        "blur_overlap": blur_overlap,
-        "dark_overlap": dark_overlap
-    }
+    return {"blur_overlap": blur_overlap, "dark_overlap": dark_overlap}
 
-def evaluate_aesthetic(image_path: str, original_item_ids: list[str]) -> list[dict]:
+
+def evaluate_aesthetic(image_path: str, original_item_ids: list[str]) -> dict:
     """Uses a multimodal LLM as a 'judge' to evaluate the aesthetic match of recommended items."""
     print("\n=== Starting Aesthetic Evaluation (LLM as Judge) ===")
 
@@ -89,10 +150,10 @@ def evaluate_aesthetic(image_path: str, original_item_ids: list[str]) -> list[di
         catalog_df = pd.read_csv("data/zara_combined.csv", index_col="reference")
     except FileNotFoundError:
         print("Error: Catalog file 'data/zara_combined.csv' not found.")
-        return []
+        return None
     except (KeyError, ValueError):
         print("Error: Catalog CSV must have a 'reference' column to be used as index.")
-        return []
+        return None
 
     # Setup OpenAI client for the judge
     load_dotenv()
@@ -125,28 +186,42 @@ Your response MUST be a JSON object with the following structure:
     # Build the message content with the original image first
     content_array = [
         {"type": "text", "text": "Here is the user's original clothing item:"},
-        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_original_image}"}},
-        {"type": "text", "text": "Here are the recommended items from the catalog. Please evaluate each one against the original item above."}
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{base64_original_image}"},
+        },
+        {
+            "type": "text",
+            "text": "Here are the recommended items from the catalog. Please evaluate each one against the original item above.",
+        },
     ]
 
     valid_items_found = False
+    item_id_to_name = {}
     for item_id in original_item_ids:
         try:
             # Get recommended item's image URL from the catalog
             item_info = catalog_df.loc[int(item_id)]
+            if isinstance(item_info, pd.DataFrame):
+                item_info = item_info.iloc[0]
             rec_image_url = item_info["image_url"]  # This column should exist!
-            
+
+            item_name = item_info.get("name", f"Item {item_id}")
+            item_id_to_name[str(item_id)] = item_name
+
             content_array.append({"type": "text", "text": f"Item ID: {item_id}"})
-            content_array.append({"type": "image_url", "image_url": {"url": rec_image_url}})
+            content_array.append(
+                {"type": "image_url", "image_url": {"url": rec_image_url}}
+            )
             valid_items_found = True
 
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             print(f"Warning: Item ID '{item_id}' not found in catalog. Skipping.")
-            
+
     if not valid_items_found:
         print("No valid images found in the catalog to evaluate.")
-        return []
-        
+        return None
+
     print(f"\nSending batch evaluation request for {len(original_item_ids)} items...")
     try:
         response = client.chat.completions.create(
@@ -160,32 +235,40 @@ Your response MUST be a JSON object with the following structure:
 
         judge_result = json.loads(response.choices[0].message.content)
         aesthetic_scores = judge_result.get("evaluations", [])
-        
+
         for eval_data in aesthetic_scores:
-            print(f"Item {eval_data.get('item_id')} | Score: {eval_data.get('score', 'N/A')}/5 | Reasoning: {eval_data.get('reasoning', 'N/A')}")
+            rec_id = str(eval_data.get("item_id"))
+            item_name = item_id_to_name.get(rec_id, f"Item {rec_id}")
+            eval_data["item_name"] = item_name
+            print(
+                f"Item: {item_name} | Score: {eval_data.get('score', 'N/A')}/5 | Reasoning: {eval_data.get('reasoning', 'N/A')}"
+            )
 
         total_score = sum(item.get("score", 0) for item in aesthetic_scores)
         average_score = total_score / len(aesthetic_scores)
         print(f"\n--- Average Aesthetic Score: {average_score:.2f}/5 ---")
-        
+
+        return {"average_score": average_score, "evaluations": aesthetic_scores}
+
     except Exception as e:
         print(f"An error occurred during aesthetic evaluation: {e}")
-        return []
-    
-    return average_score
+        return None
+
 
 if __name__ == "__main__":
     # Example Usage Flow
     original_image = "data/images/captured.jpg"
-    
+
     # For testing, you would normally run the baseline first to get its IDs, like this:
     print("Getting baseline recommendations...")
     baseline_data = llm_agent_with_function_calling(original_image)
     baseline_recs = baseline_data.get("find_recs", {}).get("recommendations", [])
     print(f"Baseline Recommendations: {baseline_recs}")
-    
+
     if baseline_recs:
         evaluate_robustness(original_image, baseline_recs)
         evaluate_aesthetic(original_image, baseline_recs)
     else:
-        print("No baseline recommendations found to compare against. Did the agent hit an error?")
+        print(
+            "No baseline recommendations found to compare against. Did the agent hit an error?"
+        )

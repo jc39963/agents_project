@@ -143,6 +143,7 @@ Work step by step:
     for iteration in range(max_iterations):
         iter_start_time = time.time()
         print(f"\n--- Iteration {iteration + 1} ---")
+        iter_log = f"**Iteration {iteration + 1}**\n\n"
 
         # Call OpenAI with function calling
         response = client.chat.completions.create(
@@ -153,6 +154,8 @@ Work step by step:
         )
 
         response_message = response.choices[0].message
+        if response_message.content:
+            iter_log += f"**Agent Thought:**\n{response_message.content}\n\n"
 
         if response_message.tool_calls:
             # Add assistant's response to messages
@@ -163,10 +166,14 @@ Work step by step:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
 
+                iter_log += f"🛠 **Calling Tool:** `{function_name}`\n**Args:** {function_args}\n"
                 result = execute_function(function_name, function_args, state)
 
                 if "error" in result:
                     print(f"Tool Call Error: {result['error']}")
+                    iter_log += f"❌ **Error:** {result['error']}\n\n"
+                else:
+                    iter_log += f"✅ **Result:** {result}\n\n"
 
                 # Add tool call result to state so agent can track it for next round
                 state["data"][function_name] = result
@@ -184,7 +191,30 @@ Work step by step:
         else:
             print("Agent finished reasoning")
             print(response_message.content)
+            iter_log += "Agent finished reasoning.\n"
+            try:
+                import streamlit as st
+
+                if "logs" in st.session_state:
+                    st.session_state.logs.append(
+                        {
+                            "action": f"Non-DL Iteration {iteration + 1}",
+                            "result": iter_log,
+                        }
+                    )
+            except ImportError:
+                pass
             break
+
+        try:
+            import streamlit as st
+
+            if "logs" in st.session_state:
+                st.session_state.logs.append(
+                    {"action": f"Non-DL Iteration {iteration + 1}", "result": iter_log}
+                )
+        except ImportError:
+            pass
 
         iter_end_time = time.time()
         print(

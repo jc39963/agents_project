@@ -1,5 +1,5 @@
 from .utils import *
-
+from src.utils import get_db
 
 def find_recs(
     rgb_list: list[tuple], item_list: list[str], feat_vec: list[float]

@@ -1,7 +1,7 @@
-import json 
+import json
 from openai import OpenAI
 from typing import Dict, List, Any, Generator
-import os 
+import os
 from dotenv import load_dotenv
 from src.dl.matching import TOOL_FUNCTIONS, TOOL_SCHEMAS
 import streamlit as st
@@ -24,41 +24,53 @@ SYSTEM_PROMPT = """
     - If there is no inputted aesthetic, go with what you think as an expert is most fashionable currently, OR provide a variety of options covering different aesthetics or crowdpleasers (e.g. preppy, bohemian, casual, basics, clean girl)
     - When you receive Zara search results, identify the name, price, and style of the matches. Use the metadata to explain why these specific items complete the outfit (e.g., 'The texture of this $match.name complements your jacket'). Do not just list URLs; provide a curated fashion critique.
 """
-class Agent():
-    def __init__(self):
 
+
+class Agent:
+    def __init__(self, log_to_ui: bool = True):
+        self.log_to_ui = log_to_ui
         self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         self.last_run_metadata = {"steps": 0, "tool_names": []}
         self.current_run_logs = []
+
     # incase reset needed
     def reset(self):
         self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         self.last_run_metadata = {"steps": 0, "tool_names": []}
         self.current_run_logs = []
+
     # actual agent loop
-    def chat(self, message: str, image_path: str = "data/images/user_image.jpg") -> Generator[str, None, None]:
+    def chat(
+        self, message: str, image_path: str = "data/images/user_image.jpg"
+    ) -> Generator[str, None, None]:
         user_message = {
             "role": "user",
             "content": [
-                {"type": "text", "text": f"Analyze this clothing item and find matches. The image is saved at {image_path}"},
+                {
+                    "type": "text",
+                    "text": f"Analyze this clothing item and find matches. The image is saved at {image_path}",
+                },
                 {
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{message}"}
-                }
-            ]
+                    "image_url": {"url": f"data:image/jpeg;base64,{message}"},
+                },
+            ],
         }
         self.messages.append(user_message)
-        steps = 0 
+        steps = 0
         # track metadata for logging and evaluation
-        self.last_run_metadata['steps'] = 0
+        self.last_run_metadata["steps"] = 0
         # enter agent tool loop
         while True:
             steps += 1
-            self.last_run_metadata['steps'] += 1
+            self.last_run_metadata["steps"] += 1
             # generate actual agent response
-            response = client.chat.completions.create(model = "gpt-4o-mini", messages = self.messages, 
-                            tools = TOOL_SCHEMAS, 
-                            tool_choice = "auto")
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=self.messages,
+                tools=TOOL_SCHEMAS,
+                tool_choice="auto",
+            )
             # check if llm wants to talk or act
             if not response.choices[0].message.tool_calls:
                 content = response.choices[0].message.content
@@ -67,7 +79,7 @@ class Agent():
                 # Yield in chunks to simulate a stream for the UI
                 chunk_size = 20
                 for i in range(0, len(content), chunk_size):
-                    yield content[i:i+chunk_size]
+                    yield content[i : i + chunk_size]
                 break
             else:
                 # append and print action
@@ -75,18 +87,21 @@ class Agent():
                 print(response.choices[0].message)
                 # if tool call
                 for tool_call in response.choices[0].message.tool_calls:
-                    # basically run or execute this tool 
+                    # basically run or execute this tool
                     function_name = tool_call.function.name
                     # parse JSON string into dict
                     args = json.loads(tool_call.function.arguments)
-                    
+
                     # Extract the thought process and log it so we can see how it's deciding
                     thought = args.pop("thought", None)
                     if thought:
-                        st.session_state.logs.append({
-                            "action": f"Thought ({function_name})",
-                            "result": thought
-                        })
+                        if self.log_to_ui and "logs" in st.session_state:
+                            st.session_state.logs.append(
+                                {
+                                    "action": f"Thought ({function_name})",
+                                    "result": thought,
+                                }
+                            )
                     # call tool
                     try:
                         fn = TOOL_FUNCTIONS[function_name]
@@ -94,14 +109,30 @@ class Agent():
                         if isinstance(result, torch.Tensor):
                             result = result.tolist()
                     except Exception as e:
-                        result = f"Error: {str(e)}"
-                    # log it and display in streamlit 
+                        error_msg = f"Error: {str(e)}"
+                        print(
+                            f"❌ Tool execution failed ({function_name}): {error_msg}"
+                        )
+                        if self.log_to_ui:
+                            st.error(
+                                f"Tool execution failed ({function_name}): {error_msg}"
+                            )
+                        result = error_msg
+                    # log it and display in streamlit
                     log_entry = {"action": function_name, "result": result}
                     self.current_run_logs.append(log_entry)
                     self.last_run_metadata["tool_names"].append(function_name)
-                    st.session_state.logs.append({
-                    "action": function_name,
-                    "result": json.dumps(result, indent=2)
-                    })
-                    self.messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": json.dumps(result)})
-    
+                    if self.log_to_ui and "logs" in st.session_state:
+                        st.session_state.logs.append(
+                            {
+                                "action": function_name,
+                                "result": json.dumps(result, indent=2),
+                            }
+                        )
+                    self.messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": json.dumps(result),
+                        }
+                    )

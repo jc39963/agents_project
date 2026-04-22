@@ -4,14 +4,14 @@ import pandas as pd
 #from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import requests 
-import cv2 
 import numpy as np 
 from PIL import Image
 import requests
 from io import BytesIO
+import io
 from transformers import CLIPProcessor, CLIPModel 
 import torch
-from data.database import get_db
+from src.utils import get_db
 import zipfile
 from matching import encode_images, encode_texts
 
@@ -21,7 +21,7 @@ model = CLIPModel.from_pretrained(model_name)
 processor = CLIPProcessor.from_pretrained(model_name)
 BATCH_SIZE = 50
 # Get Pinecone index
-index = get_db()
+index = get_db(name='zara-images')
 # get image to format for clip
 def read_images(zip_path):
   all_images = []

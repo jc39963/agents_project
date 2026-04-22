@@ -6,6 +6,8 @@ import os
 from pinecone import Pinecone, ServerlessSpec
 from dotenv import load_dotenv
 
+cv2.setNumThreads(0)  # Prevent OpenCV from spawning OpenMP threads that corrupt PyTorch
+
 
 def load_artifacts():
     base_dir = os.path.dirname(__file__)

@@ -2,3 +2,5 @@
 .env
 agent_output.txt
 **/__pycache__
+clean_env
+
