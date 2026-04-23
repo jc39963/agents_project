@@ -2,6 +2,7 @@ import cv2
 import os
 import time
 
+## OLD, NOT IN USE ANYMORE AS STREAMLIT HAS BUILT-IN WEBCAME UTILITY
 def capture_box_only(path_name):
     save_dir = 'data/images'
     os.makedirs(save_dir, exist_ok=True)

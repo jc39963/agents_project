@@ -17,3 +17,6 @@ pillow
 requests
 sentence_transformers
 openai
+kagglehub
+sklearn
+

@@ -266,6 +266,7 @@ def execute_function(function_name, arguments, state=None):
 
 
 if __name__ == "__main__":
+    # Test agent
     image_to_process = "data/images/captured.jpg"
 
     if not os.path.exists(image_to_process):

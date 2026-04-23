@@ -43,8 +43,7 @@ agents_project/
 ├── src/
 │   ├── dl/
 │   │   ├── agent.py            # GPT-4o-mini agent and Streamlit loop
-        ├── generate_embeddings.py                      # populates `zara-images` Pinecone index with Zara images embeddings
-
+|   |   ├── generate_embeddings.py     # populates `zara-images` Pinecone index with Zara images embeddings
 │   │   └── matching.py         # DL tool schemas and CLIP embedding logic
 │   │
 │   ├── non_dl/
@@ -53,7 +52,20 @@ agents_project/
 │   │   ├── identify_color.py   # Dominant RGB extraction
 │   │   ├── identify_type.py    # SVM/HOG image classification
 │   │   ├── item_combos.py      # Rule-based clothing pairings
-│   │   └── search_catalog.py   # Composite Pinecone vector search
+│   │   |── search_catalog.py   # Composite Pinecone vector search
+│   │   |── utils.py            # Shared utilities for non DL agent
+│   │   └── scripts/            # Scripts that need to be run only one time
+|   │       ├── svm_data.py             # Prepares & preprocesses Colorful Fashion dataset data for SVM training
+|   |       ├── svm_train.py            # Trains & saves SVM artifacts
+|   │       └── vector_db.py            # Creates HOG & RGB vectors from Zara image data & upserts to Pinecone
+│   │   └── colab_nbs/          # Original ipynb notebooks run on Jupyter for steps described in scripts folder
+|   │       ├── svm_non_dl_pt1.ipynb
+|   │       ├── svm_non_dl_pt2.ipynb
+|   │       └── upsert_imgs.ipynb
+│   │   └── artifacts/          # Saved PCA, standard scaler, and SVM objects as joblib files
+|   │       ├── svm_model.joblib
+|   │       ├── scaler_model.joblib
+|   │       └── pca_model.joblib            
 │   │
 │   ├── eval.py                 # Evaluation suite (robustness, aesthetic scoring)
 │   └── utils.py                # Pinecone DB initialization and shared utilities
@@ -78,16 +90,18 @@ agents_project/
 3. **Data Requirements:**
    Ensure the Zara dataset or your dataset of products is located at `data/zara_combined.csv` and contains standard columns (e.g., `reference`, `image_url`, `name`). You will also need to populate your Pinecone indexes (`zara-images`, `product-non-dl-features`, `product-non-dl-colors`) beforehand.
 
-4. **Running the App:**  
+4. **Non DL Agent Prerequisite Steps:**
+   Run the following scripts to 1. preprocess [Colorful Fashion](https://www.kaggle.com/datasets/nguyngiabol/colorful-fashion-dataset-for-object-detection/data) image dataset for SVM training, 2. for training and saving the SVM & related artifacts, and 3. for upserting feature vectors & RGB vectors of Zara catalog images to Pinecone.
+
+    ```bash
+   python -m src.non_dl.scripts.svm_data.py
+   python -m src.non_dl.scripts.svm_train.py
+   python -m src.non_dl.scripts.upsert_imgs.py
+    ```
+
+5. **Running the App:**  
 
     ```bash
     streamlit run app.py
     ```
-
-
-
-5. **Running the Evaluation:**
-   You can test both agents and evaluate their outputs by running the evaluation script:
-   ```bash
-   python -m src.eval
-   ```
+This allows you to upload an image of your clothing, run either the non-DL or DL agent, and see its recommendations. On the "Evaluation" tab, you can see the results of eval.py functions (robustness, aesthetic scoring by LLM-as-judge, latency metric).
